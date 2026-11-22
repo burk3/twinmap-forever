@@ -2,6 +2,10 @@
 
 What changed in each version of Twinmap, newest first. The section of a version is also the text of its release on GitHub and of the addon's file on CurseForge.
 
+## 0.15.1 - 2026-11-22
+
+Test release on a fork: the addon zip and release.json go into the release.
+
 ## 0.15.0 - 2026-11-22
 
 ### New
