@@ -1,7 +1,8 @@
 name: Release
 
 # A tag like v0.1.0 makes a release: the installer is built with that version, published with the
-# two files the app needs to update itself, and sent to VirusTotal; the addon goes to CurseForge.
+# two files the app needs to update itself, and sent to VirusTotal; the addon goes into the same release,
+# for addon managers that install from GitHub (CurseBreaker, WowUp), and to CurseForge.
 # A version with a dash in it (v0.1.0-rc.1) is published as a pre-release, which the app does not
 # update to and CurseForge does not get.
 on:
@@ -70,6 +71,27 @@ jobs:
           npx electron-vite build
           npx electron-builder --win nsis --publish never -c.extraMetadata.version="$VERSION"
 
+      # The addon in the zip a player would unpack into AddOns, the two license files inside, and release.json beside it.
+      # release.json is the BigWigs packager's manifest: CurseBreaker and WowUp read it to pick the zip for the Forever
+      # client, and with it they never take the installer for the addon. It goes into every release, so the newest
+      # release always has the addon, and a release of the addon alone never becomes the latest one that the app updates from.
+      - name: Package the addon
+        run: |
+          mkdir -p dist/addon/TwinmapForever
+          cp ../addon/TwinmapForever/* dist/addon/TwinmapForever/
+          cp ../LICENSE dist/addon/TwinmapForever/LICENSE.txt
+          cp ../THIRD-PARTY-LICENSES dist/addon/TwinmapForever/THIRD-PARTY-LICENSES.txt
+          (cd dist/addon && 7z a -tzip "TwinmapForever-$VERSION.zip" TwinmapForever > /dev/null)
+          node -e '
+            const [toc, version, out] = process.argv.slice(1)
+            const line = require("fs").readFileSync(toc, "utf8").match(/^## Interface:(.*)$/m)
+            if (!line) throw new Error(toc + " has no ## Interface line")
+            const metadata = line[1].split(",").map((s) => ({ flavor: "forever", interface: Number(s.trim()) }))
+            const release = { name: "Twinmap Forever", version, filename: "TwinmapForever-" + version + ".zip", nolib: false, metadata }
+            require("fs").writeFileSync(out, JSON.stringify({ releases: [release] }))
+          ' ../addon/TwinmapForever/TwinmapForever.toc "$VERSION" dist/addon/release.json
+          cat dist/addon/release.json
+
       # The installer, its blockmap and the file that names the latest version: the app updates itself only with all three.
       - name: Publish the release
         run: |
@@ -80,7 +102,8 @@ jobs:
           # the same (releases/latest/download/Twinmap-Setup.exe), for the site and the README to link the download itself.
           cp "dist/Twinmap-Setup-$VERSION.exe" dist/Twinmap-Setup.exe
           gh release create "$GITHUB_REF_NAME" --title "Twinmap $VERSION" --notes-file notes.md $PRE \
-            "dist/Twinmap-Setup-$VERSION.exe" "dist/Twinmap-Setup-$VERSION.exe.blockmap" $UPDATE_FILES dist/Twinmap-Setup.exe
+            "dist/Twinmap-Setup-$VERSION.exe" "dist/Twinmap-Setup-$VERSION.exe.blockmap" $UPDATE_FILES dist/Twinmap-Setup.exe \
+            "dist/addon/TwinmapForever-$VERSION.zip" dist/addon/release.json
 
       # The result goes into the release notes, and into virustotal.json for the badge of the README and of the site.
       # A scan that fails does not take the release back: it is published already.
@@ -127,9 +150,4 @@ jobs:
             echo "::warning::CF_API_TOKEN or CF_PROJECT_ID is not set: the addon was not uploaded to CurseForge"
             exit 0
           fi
-          mkdir -p dist/addon/TwinmapForever
-          cp ../addon/TwinmapForever/* dist/addon/TwinmapForever/
-          cp ../LICENSE dist/addon/TwinmapForever/LICENSE.txt
-          cp ../THIRD-PARTY-LICENSES dist/addon/TwinmapForever/THIRD-PARTY-LICENSES.txt
-          (cd dist/addon && 7z a -tzip "TwinmapForever-$VERSION.zip" TwinmapForever > /dev/null)
           node scripts/curseforge.js "dist/addon/TwinmapForever-$VERSION.zip" ../addon/TwinmapForever/TwinmapForever.toc "$VERSION" notes.md
