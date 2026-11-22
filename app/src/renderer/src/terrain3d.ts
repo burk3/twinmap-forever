@@ -196,8 +196,11 @@ export class Terrain {
     private host: HTMLElement,
     private compass: Compass,
   ) {
+    // Drawn by the processor (hardware acceleration off, or no GPU Chromium takes): no antialias, three times the
+    // frames for the same CPU (design/gpu/frames-trial.js). The browser says so by refusing a context that needs the GPU.
+    const software = !document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat: true })
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !software,
       powerPreference: 'high-performance',
     })
     // On a phone two points of the view a point of the page are enough: three are nine times the work of one.
